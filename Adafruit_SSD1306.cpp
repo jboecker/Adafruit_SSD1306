@@ -17,9 +17,7 @@ All text above, and the splash screen below must be included in any redistributi
 *********************************************************************/
 
 #include <avr/pgmspace.h>
-#ifndef __SAM3X8E__
- #include <util/delay.h>
-#endif
+#define _delay_ms delay
 #include <stdlib.h>
 
 #include <Wire.h>
@@ -166,17 +164,17 @@ void Adafruit_SSD1306::begin(uint8_t vccstate, uint8_t i2caddr, bool reset) {
   if (sid != -1){
     pinMode(dc, OUTPUT);
     pinMode(cs, OUTPUT);
-    csport      = portOutputRegister(digitalPinToPort(cs));
+    csport      = (uint32_t) portBASERegister(digitalPinToPort(cs));
     cspinmask   = digitalPinToBitMask(cs);
-    dcport      = portOutputRegister(digitalPinToPort(dc));
+    dcport      = (uint32_t) portBASERegister(digitalPinToPort(dc));
     dcpinmask   = digitalPinToBitMask(dc);
     if (!hwSPI){
       // set pins for software-SPI
       pinMode(sid, OUTPUT);
       pinMode(sclk, OUTPUT);
-      clkport     = portOutputRegister(digitalPinToPort(sclk));
+      clkport     = (uint32_t) portBASERegister(digitalPinToPort(sclk));
       clkpinmask  = digitalPinToBitMask(sclk);
-      mosiport    = portOutputRegister(digitalPinToPort(sid));
+      mosiport    = (uint32_t) portBASERegister(digitalPinToPort(sid));
       mosipinmask = digitalPinToBitMask(sid);
       }
     if (hwSPI){
@@ -339,14 +337,14 @@ void Adafruit_SSD1306::ssd1306_command(uint8_t c) {
   {
     // SPI
     //digitalWrite(cs, HIGH);
-    *csport |= cspinmask;
+    ROM_GPIOPinWrite(csport, cspinmask, cspinmask);
     //digitalWrite(dc, LOW);
-    *dcport &= ~dcpinmask;
+    ROM_GPIOPinWrite(dcport, dcpinmask, 0);
     //digitalWrite(cs, LOW);
-    *csport &= ~cspinmask;
+    ROM_GPIOPinWrite(csport, cspinmask, 0);
     fastSPIwrite(c);
     //digitalWrite(cs, HIGH);
-    *csport |= cspinmask;
+    ROM_GPIOPinWrite(csport, cspinmask, cspinmask);
   }
   else
   {
@@ -453,14 +451,14 @@ void Adafruit_SSD1306::ssd1306_data(uint8_t c) {
   {
     // SPI
     //digitalWrite(cs, HIGH);
-    *csport |= cspinmask;
+    ROM_GPIOPinWrite(csport, cspinmask, cspinmask);
     //digitalWrite(dc, HIGH);
-    *dcport |= dcpinmask;
+    ROM_GPIOPinWrite(dcport, dcpinmask, dcpinmask);
     //digitalWrite(cs, LOW);
-    *csport &= ~cspinmask;
+    ROM_GPIOPinWrite(csport, cspinmask, 0);
     fastSPIwrite(c);
     //digitalWrite(cs, HIGH);
-    *csport |= cspinmask;
+    ROM_GPIOPinWrite(csport, cspinmask, cspinmask);
   }
   else
   {
@@ -493,18 +491,19 @@ void Adafruit_SSD1306::display(void) {
   if (sid != -1)
   {
     // SPI
-    *csport |= cspinmask;
-    *dcport |= dcpinmask;
-    *csport &= ~cspinmask;
+    ROM_GPIOPinWrite(csport, cspinmask, cspinmask);
+    ROM_GPIOPinWrite(dcport, dcpinmask, dcpinmask);
+    ROM_GPIOPinWrite(csport, cspinmask, 0);
 
     for (uint16_t i=0; i<(SSD1306_LCDWIDTH*SSD1306_LCDHEIGHT/8); i++) {
       fastSPIwrite(buffer[i]);
       //ssd1306_data(buffer[i]);
     }
-    *csport |= cspinmask;
+    ROM_GPIOPinWrite(csport, cspinmask, cspinmask);
   }
   else
   {
+  #if 0 // Energia port does not support I2C yet
     // save I2C bitrate
 #ifndef __SAM3X8E__
     uint8_t twbrbackup = TWBR;
@@ -529,6 +528,7 @@ void Adafruit_SSD1306::display(void) {
 #ifndef __SAM3X8E__
     TWBR = twbrbackup;
 #endif
+  #endif
   }
 }
 
@@ -544,10 +544,10 @@ inline void Adafruit_SSD1306::fastSPIwrite(uint8_t d) {
     (void)SPI.transfer(d);
   } else {
     for(uint8_t bit = 0x80; bit; bit >>= 1) {
-      *clkport &= ~clkpinmask;
-      if(d & bit) *mosiport |=  mosipinmask;
-      else        *mosiport &= ~mosipinmask;
-      *clkport |=  clkpinmask;
+      ROM_GPIOPinWrite(clkport, clkpinmask, 0);
+      if (d & bit) ROM_GPIOPinWrite(mosiport, mosipinmask, mosipinmask);
+      else ROM_GPIOPinWrite(mosiport, mosipinmask, 0);
+      ROM_GPIOPinWrite(clkport, clkpinmask, clkpinmask);
     }
   }
   //*csport |= cspinmask;
